@@ -7,6 +7,7 @@ from app.routers import analisis
 
 app = FastAPI(title="API Backend - Taller IoT + YOLO")
 
+# Configurar CORS para permitir peticiones desde el Frontend
 app.add_middleware(
 CORSMiddleware,
 allow_origins=["*"],
@@ -15,21 +16,23 @@ allow_methods=["*"],
 allow_headers=["*"],
 )
 
+# Incluir las rutas existentes de visión, telemetría y PDF
 app.include_router(analisis.router)
 
 
 @app.get("/")
 def root():
-return {"mensaje": "Backend IoT + Vision activo y listo"}
+    return {"mensaje": "Backend IoT + Vision activo y listo"}
 
 
+# --- MODELO Y ENDPOINT DE CONTROL REMOTO (Frecuencia ESP32) ---
 class FrecuenciaRequest(BaseModel):
-intervalo_segundos: int
+    intervalo_segundos: int
 
 
 @app.post("/api/control/frecuencia")
 def cambiar_frecuencia(data: FrecuenciaRequest):
-return {
+    return {
 "status": "success",
 "mensaje": f"Frecuencia actualizada a {data.intervalo_segundos} segundos.",
 "frecuencia_actual": data.intervalo_segundos,
@@ -37,9 +40,10 @@ return {
 }
 
 
+# --- ENDPOINT DE BITÁCORA / INCIDENTES ---
 @app.get("/api/incidentes")
 def obtener_incidentes():
-return [
+    return [
 {
 "id": 1,
 "timestamp": datetime.now().isoformat(),
