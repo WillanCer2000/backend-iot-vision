@@ -19,13 +19,16 @@ allow_headers=["*"],
 # Incluir las rutas existentes de visión, telemetría y PDF
 app.include_router(analisis.router)
 
+
 @app.get("/")
 def root():
 return {"mensaje": "Backend IoT + Vision activo y listo"}
 
+
 # --- MODELO Y ENDPOINT DE CONTROL REMOTO (Frecuencia ESP32) ---
 class FrecuenciaRequest(BaseModel):
 intervalo_segundos: int
+
 
 @app.post("/api/control/frecuencia")
 def cambiar_frecuencia(data: FrecuenciaRequest):
@@ -33,8 +36,9 @@ return {
 "status": "success",
 "mensaje": f"Frecuencia actualizada a {data.intervalo_segundos} segundos.",
 "frecuencia_actual": data.intervalo_segundos,
-"timestamp": datetime.now().isoformat()
+"timestamp": datetime.now().isoformat(),
 }
+
 
 # --- ENDPOINT DE BITÁCORA / INCIDENTES ---
 @app.get("/api/incidentes")
@@ -45,13 +49,13 @@ return [
 "timestamp": datetime.now().isoformat(),
 "tipo": "ALERTA_TURBIDEZ",
 "descripcion": "Nivel de turbidez elevado detectado en tanque principal (NTU > 15)",
-"gravedad": "ALTA"
+"gravedad": "ALTA",
 },
 {
 "id": 2,
 "timestamp": datetime.now().isoformat(),
 "tipo": "DETECCION_VISUAL",
 "descripcion": "Residuo plástico detectado por visión artificial (Confianza: 94%)",
-"gravedad": "MEDIA"
-}
+"gravedad": "MEDIA",
+},
 ]
