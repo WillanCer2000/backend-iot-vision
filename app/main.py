@@ -29,9 +29,6 @@ intervalo_segundos: int
 
 @app.post("/api/control/frecuencia")
 def cambiar_frecuencia(data: FrecuenciaRequest):
-"""
-Recibe la orden de cambiar el intervalo de muestreo del ESP32 desde iot_control.js
-"""
 return {
 "status": "success",
 "mensaje": f"Frecuencia actualizada a {data.intervalo_segundos} segundos.",
@@ -42,9 +39,6 @@ return {
 # --- ENDPOINT DE BITÁCORA / INCIDENTES ---
 @app.get("/api/incidentes")
 def obtener_incidentes():
-"""
-Retorna la lista de eventos e incidentes registrados
-"""
 return [
 {
 "id": 1,
