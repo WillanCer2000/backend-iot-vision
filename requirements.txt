@@ -3,7 +3,6 @@ uvicorn[standard]
 ultralytics
 opencv-python-headless
 influxdb-client
-influxdb-client-3
 pandas
 fpdf2
 reportlab
