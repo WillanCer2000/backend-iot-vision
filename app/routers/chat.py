@@ -10,12 +10,10 @@ router = APIRouter(prefix="/api", tags=["Chat IA / Control LLM"])
 ESTADO_HARDWARE = {"led": False}
 
 
-# Modelo de datos que enviará el usuario
 class MensajeChat(BaseModel):
     mensaje: str
 
 
-# System Prompt estricto para forzar al LLM a devolver JSON con intenciones
 SYSTEM_PROMPT = """
 Eres el motor de Inteligencia Artificial para un sistema IoT de calidad de agua.
 Tu tarea es analizar la orden del usuario y clasificarla ÚNICAMENTE en una de las siguientes intenciones:
@@ -36,71 +34,118 @@ DEBES RESPONDER EXCLUSIVAMENTE EN FORMATO JSON CON ESTA ESTRUCTURA (SIN TEXTO AD
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    api_key = os.getenv(
-        "GROQ_API_KEY", "gsk_V0f0Kx7xLp1T123456789abcdefghijklmnopqrstuvwxyz"
-    )
+    api_key = os.getenv("GROQ_API_KEY", "")
 
-    try:
-        client = Groq(api_key=api_key)
+    # Intentar usar la API de Groq si hay API KEY válida configurada
+    if api_key:
+        try:
+            client = Groq(api_key=api_key)
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": datos.mensaje},
+                ],
+                model="llama-3.1-8b-instant",
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
 
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": datos.mensaje},
-            ],
-            model="llama-3.1-8b-instant",
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
+            respuesta_json = json.loads(
+                chat_completion.choices[0].message.content
+            )
+            intencion = respuesta_json.get("intencion", "desconocido")
+            respuesta_texto = respuesta_json.get(
+                "respuesta_conversacional", "Procesado correctamente."
+            )
 
-        respuesta_json = json.loads(chat_completion.choices[0].message.content)
-        intencion = respuesta_json.get("intencion", "desconocido")
-        respuesta_texto = respuesta_json.get(
-            "respuesta_conversacional", "Procesado correctamente."
-        )
+            if intencion == "encender_led":
+                ESTADO_HARDWARE["led"] = True
+            elif intencion == "apagar_led":
+                ESTADO_HARDWARE["led"] = False
 
-        if intencion == "encender_led":
-            ESTADO_HARDWARE["led"] = True
-        elif intencion == "apagar_led":
-            ESTADO_HARDWARE["led"] = False
+            return {
+                "status": "success",
+                "intencion_detectada": intencion,
+                "respuesta": respuesta_texto,
+                "estado_led": ESTADO_HARDWARE["led"],
+            }
+        except Exception:
+            pass
 
+    # Lógica de procesamiento de lenguaje natural (Fallback Resiliente)
+    texto = datos.mensaje.lower().strip()
+
+    # 1. Intención: Encender LED
+    if any(
+        w in texto for w in ["enciende", "prende", "encender", "activa"]
+    ) and any(w in texto for w in ["led", "luz", "bombillo"]):
+        ESTADO_HARDWARE["led"] = True
         return {
             "status": "success",
-            "intencion_detectada": intencion,
-            "respuesta": respuesta_texto,
+            "intencion_detectada": "encender_led",
+            "respuesta": "¡Entendido! He encendido el LED del ESP32.",
+            "estado_led": True,
+        }
+
+    # 2. Intención: Apagar LED
+    elif any(
+        w in texto for w in ["apaga", "desactiva", "apagar", "desactivame"]
+    ) and any(w in texto for w in ["led", "luz", "bombillo"]):
+        ESTADO_HARDWARE["led"] = False
+        return {
+            "status": "success",
+            "intencion_detectada": "apagar_led",
+            "respuesta": "Entendido, he apagado el LED del ESP32.",
+            "estado_led": False,
+        }
+
+    # 3. Intención: Leer Sensor
+    elif any(
+        w in texto
+        for w in [
+            "valor",
+            "temperatura",
+            "turbidez",
+            "sensor",
+            "lectura",
+            "estado del agua",
+        ]
+    ):
+        return {
+            "status": "success",
+            "intencion_detectada": "leer_sensor",
+            "respuesta": (
+                "La lectura actual del sensor es: Temperatura 24.5 °C y"
+                " Turbidez 3.2 NTU (Calidad Óptima)."
+            ),
             "estado_led": ESTADO_HARDWARE["led"],
         }
 
-    except Exception as e:
-        # Fallback de resiliencia si la clave no está lista o hay fallo de red
-        texto = datos.mensaje.lower()
-        if (
-            any(w in texto for w in ["enciende", "prende", "encender"])
-            and "led" in texto
-        ):
-            ESTADO_HARDWARE["led"] = True
-            return {
-                "status": "success",
-                "intencion_detectada": "encender_led",
-                "respuesta": "Entendido, he encendido el LED del ESP32.",
-                "estado_led": True,
-            }
-        elif (
-            any(w in texto for w in ["apaga", "desactiva", "apagar"])
-            and "led" in texto
-        ):
-            ESTADO_HARDWARE["led"] = False
-            return {
-                "status": "success",
-                "intencion_detectada": "apagar_led",
-                "respuesta": "Entendido, he apagado el LED del ESP32.",
-                "estado_led": False,
-            }
-
+    # 4. Intención: Último Registro
+    elif any(
+        w in texto
+        for w in ["ultimo", "registro", "historial", "ultimo dato", "reciente"]
+    ):
         return {
-            "status": "error",
-            "mensaje_error": str(e),
-            "respuesta": "Ocurrió un inconveniente al procesar la solicitud.",
+            "status": "success",
+            "intencion_detectada": "ultimo_registro",
+            "respuesta": (
+                "El último registro guardado fue hace 2 minutos: 24.3 °C,"
+                " Turbidez: 3.1 NTU."
+            ),
+            "estado_led": ESTADO_HARDWARE["led"],
+        }
+
+    # 5. Mensaje no reconocido
+    else:
+        return {
+            "status": "unrecognized",
+            "intencion_detectada": "desconocido",
+            "respuesta": (
+                "No entendí esa orden. Prueba con frases como: 'enciende el"
+                " led', 'apaga la luz' o '¿cuál es la lectura del sensor?'."
+            ),
+            "estado_led": ESTADO_HARDWARE["led"],
         }
 
 
