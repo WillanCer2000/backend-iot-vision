@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Importamos ambos routers (analisis y chat)
-from app.routers import analisis, chat
+# Importamos los routers (analisis, chat y vista_chat)
+from app.routers import analisis, chat, vista_chat
 
 app = FastAPI(title="API Backend - Taller IoT + YOLO")
 
@@ -17,9 +17,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Incluir los routers en la aplicación
+# Incluir routers en la aplicación
 app.include_router(analisis.router)
 app.include_router(chat.router)
+app.include_router(vista_chat.router)
 
 
 @app.get("/")

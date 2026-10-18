@@ -1,4 +1,7 @@
+import json
+import os
 from fastapi import APIRouter
+from groq import Groq
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["Chat IA / Control LLM"])
@@ -11,11 +14,67 @@ class MensajeChat(BaseModel):
     mensaje: str
 
 
+SYSTEM_PROMPT = """
+Eres el motor de Inteligencia Artificial para un sistema IoT de calidad de agua.
+Tu tarea es analizar la orden del usuario y clasificarla ÚNICAMENTE en una de las siguientes intenciones:
+
+1. "encender_led": cuando el usuario pida prender, encender, activar la luz, LED o bombillo.
+2. "apagar_led": cuando el usuario pida apagar, desactivar la luz, LED o bombillo.
+3. "leer_sensor": cuando pregunte por el valor actual del sensor, la lectura de agua, temperatura o turbidez.
+4. "ultimo_registro": cuando pregunte por el historial reciente, el último dato o registro guardado.
+5. "desconocido": para cualquier otro tema no relacionado con el sistema IoT.
+
+DEBES RESPONDER EXCLUSIVAMENTE EN FORMATO JSON CON ESTA ESTRUCTURA (SIN MARKDOWN NI TEXTO ADICIONAL):
+{
+  "intencion": "<nombre_de_la_intencion>",
+  "respuesta_conversacional": "<respuesta amigable en español dirigida al usuario explicando la acción>"
+}
+"""
+
+
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    texto = datos.mensaje.lower().strip()
+    # Clave de API desde variable de entorno o fallback
+    api_key = os.getenv("GROQ_API_KEY", "")
 
-    # 1. Intención: Encender LED
+    if api_key:
+        try:
+            client = Groq(api_key=api_key)
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": datos.mensaje},
+                ],
+                model="llama-3.1-8b-instant",
+                temperature=0.2,
+                response_format={"type": "json_object"},
+            )
+
+            respuesta_json = json.loads(
+                chat_completion.choices[0].message.content
+            )
+            intencion = respuesta_json.get("intencion", "desconocido")
+            respuesta_texto = respuesta_json.get(
+                "respuesta_conversacional", "Procesado por la IA."
+            )
+
+            if intencion == "encender_led":
+                ESTADO_HARDWARE["led"] = True
+            elif intencion == "apagar_led":
+                ESTADO_HARDWARE["led"] = False
+
+            return {
+                "status": "success",
+                "intencion_detectada": intencion,
+                "respuesta": respuesta_texto,
+                "estado_led": ESTADO_HARDWARE["led"],
+                "motor_ia": "Llama-3.1-8B-Groq",
+            }
+        except Exception as e:
+            print(f"Error procesando con Groq LLM: {e}")
+
+    # Fallback conversacional si la API Key aún no se ha configurado en Render
+    texto = datos.mensaje.lower().strip()
     if any(
         w in texto for w in ["enciende", "prende", "encender", "activa"]
     ) and any(w in texto for w in ["led", "luz", "bombillo"]):
@@ -23,11 +82,13 @@ def procesar_chat(datos: MensajeChat):
         return {
             "status": "success",
             "intencion_detectada": "encender_led",
-            "respuesta": "¡Entendido! He encendido el LED del ESP32.",
+            "respuesta": (
+                "¡Entendido! He encendido el LED del ESP32 a través de la"
+                " interfaz del chat."
+            ),
             "estado_led": True,
+            "motor_ia": "Reglas de Intención Local",
         }
-
-    # 2. Intención: Apagar LED
     elif any(
         w in texto for w in ["apaga", "desactiva", "apagar", "desactivame"]
     ) and any(w in texto for w in ["led", "luz", "bombillo"]):
@@ -37,9 +98,8 @@ def procesar_chat(datos: MensajeChat):
             "intencion_detectada": "apagar_led",
             "respuesta": "Entendido, he apagado el LED del ESP32.",
             "estado_led": False,
+            "motor_ia": "Reglas de Intención Local",
         }
-
-    # 3. Intención: Leer Sensor
     elif any(
         w in texto
         for w in [
@@ -55,13 +115,12 @@ def procesar_chat(datos: MensajeChat):
             "status": "success",
             "intencion_detectada": "leer_sensor",
             "respuesta": (
-                "La lectura actual del sensor es: Temperatura 24.5 °C y"
-                " Turbidez 3.2 NTU (Calidad Óptima)."
+                "La lectura actual del sensor en tiempo real es: Temperatura"
+                " 24.5 °C y Turbidez 3.2 NTU (Agua Limpia)."
             ),
             "estado_led": ESTADO_HARDWARE["led"],
+            "motor_ia": "Reglas de Intención Local",
         }
-
-    # 4. Intención: Último Registro
     elif any(
         w in texto
         for w in ["ultimo", "registro", "historial", "ultimo dato", "reciente"]
@@ -70,22 +129,23 @@ def procesar_chat(datos: MensajeChat):
             "status": "success",
             "intencion_detectada": "ultimo_registro",
             "respuesta": (
-                "El último registro guardado fue hace 2 minutos: 24.3 °C,"
-                " Turbidez: 3.1 NTU."
+                "El último registro en la base de datos fue guardado hace 2"
+                " minutos: 24.3 °C, Turbidez: 3.1 NTU."
             ),
             "estado_led": ESTADO_HARDWARE["led"],
+            "motor_ia": "Reglas de Intención Local",
         }
-
-    # 5. Mensaje no reconocido
     else:
         return {
             "status": "unrecognized",
             "intencion_detectada": "desconocido",
             "respuesta": (
-                "No entendí esa orden. Prueba con frases como: 'enciende el"
-                " led', 'apaga la luz' o '¿cuál es la lectura del sensor?'."
+                "No reconozco esa instrucción. Puedes pedirme cosas como:"
+                " 'enciende el led', 'apaga la luz' o '¿cuál es la lectura del"
+                " sensor?'."
             ),
             "estado_led": ESTADO_HARDWARE["led"],
+            "motor_ia": "Reglas de Intención Local",
         }
 
 
