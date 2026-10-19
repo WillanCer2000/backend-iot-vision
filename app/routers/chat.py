@@ -34,8 +34,8 @@ DEBES RESPONDER EXCLUSIVAMENTE EN FORMATO JSON CON ESTA ESTRUCTURA (SIN MARKDOWN
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    # Clave de API desde variable de entorno o fallback
-    api_key = os.getenv("GROQ_API_KEY", "")
+    # Poner tu API Key de Groq directa como fallback si no la lee del entorno de Render
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
 
     if api_key:
         try:
@@ -46,7 +46,7 @@ def procesar_chat(datos: MensajeChat):
                     {"role": "user", "content": datos.mensaje},
                 ],
                 model="llama-3.1-8b-instant",
-                temperature=0.2,
+                temperature=0.1,
                 response_format={"type": "json_object"},
             )
 
