@@ -60,7 +60,6 @@ def cargar_interfaz_chat():
 
                 const chatBox = document.getElementById('chatBox');
 
-                // Mostrar mensaje del usuario
                 const userDiv = document.createElement('div');
                 userDiv.className = 'message user';
                 userDiv.innerText = mensaje;
@@ -77,13 +76,13 @@ def cargar_interfaz_chat():
                     });
                     const data = await response.json();
 
-                    // Mostrar respuesta del Bot
+                    const motor = data.motor_ia ? data.motor_ia : 'Llama-3.1-8B-Groq';
+
                     const botDiv = document.createElement('div');
                     botDiv.className = 'message bot';
-                    botDiv.innerHTML = `${data.respuesta} <span class="badge-status">Intención: <b>${data.intencion_detectada}</b></span>`;
+                    botDiv.innerHTML = `${data.respuesta} <span class="badge-status">Intención: <b>${data.intencion_detectada}</b> | Motor: <b>${motor}</b></span>`;
                     chatBox.appendChild(botDiv);
 
-                    // Actualizar indicador LED
                     const ledSpan = document.getElementById('ledState');
                     if (data.estado_led) {
                         ledSpan.className = 'led-on';
