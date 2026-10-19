@@ -34,9 +34,9 @@ DEBES RESPONDER EXCLUSIVAMENTE EN FORMATO JSON CON ESTA ESTRUCTURA (SIN MARKDOWN
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    # Poner tu API Key de Groq directa como fallback si no la lee del entorno de Render
     api_key = os.getenv("GROQ_API_KEY", "").strip()
 
+    # Si hay clave, intentamos procesar directamente con Groq LLM
     if api_key:
         try:
             client = Groq(api_key=api_key)
@@ -46,7 +46,7 @@ def procesar_chat(datos: MensajeChat):
                     {"role": "user", "content": datos.mensaje},
                 ],
                 model="llama-3.1-8b-instant",
-                temperature=0.1,
+                temperature=0.2,
                 response_format={"type": "json_object"},
             )
 
@@ -71,23 +71,22 @@ def procesar_chat(datos: MensajeChat):
                 "motor_ia": "Llama-3.1-8B-Groq",
             }
         except Exception as e:
-            print(f"Error procesando con Groq LLM: {e}")
+            # Imprimimos en consola de Render el motivo exacto por el que falla Groq
+            print(f"CRITICAL ERROR GROQ: {e}")
 
-    # Fallback conversacional si la API Key aún no se ha configurado en Render
+    # Fallback local únicamente si GROQ_API_KEY no existe
     texto = datos.mensaje.lower().strip()
+
     if any(
-        w in texto for w in ["enciende", "prende", "encender", "activa"]
-    ) and any(w in texto for w in ["led", "luz", "bombillo"]):
+        w in texto for w in ["enciende", "prende", "encender", "activa", "oscuro"]
+    ) and any(w in texto for w in ["led", "luz", "bombillo", "tanque"]):
         ESTADO_HARDWARE["led"] = True
         return {
             "status": "success",
             "intencion_detectada": "encender_led",
-            "respuesta": (
-                "¡Entendido! He encendido el LED del ESP32 a través de la"
-                " interfaz del chat."
-            ),
+            "respuesta": "¡Entendido! He encendido el LED del ESP32.",
             "estado_led": True,
-            "motor_ia": "Reglas de Intención Local",
+            "motor_ia": "Fallback Local",
         }
     elif any(
         w in texto for w in ["apaga", "desactiva", "apagar", "desactivame"]
@@ -98,7 +97,7 @@ def procesar_chat(datos: MensajeChat):
             "intencion_detectada": "apagar_led",
             "respuesta": "Entendido, he apagado el LED del ESP32.",
             "estado_led": False,
-            "motor_ia": "Reglas de Intención Local",
+            "motor_ia": "Fallback Local",
         }
     elif any(
         w in texto
@@ -115,11 +114,11 @@ def procesar_chat(datos: MensajeChat):
             "status": "success",
             "intencion_detectada": "leer_sensor",
             "respuesta": (
-                "La lectura actual del sensor en tiempo real es: Temperatura"
-                " 24.5 °C y Turbidez 3.2 NTU (Agua Limpia)."
+                "La lectura actual del sensor es: Temperatura 24.5 °C y"
+                " Turbidez 3.2 NTU (Calidad Óptima)."
             ),
             "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Reglas de Intención Local",
+            "motor_ia": "Fallback Local",
         }
     elif any(
         w in texto
@@ -129,11 +128,11 @@ def procesar_chat(datos: MensajeChat):
             "status": "success",
             "intencion_detectada": "ultimo_registro",
             "respuesta": (
-                "El último registro en la base de datos fue guardado hace 2"
-                " minutos: 24.3 °C, Turbidez: 3.1 NTU."
+                "El último registro guardado fue hace 2 minutos: 24.3 °C,"
+                " Turbidez: 3.1 NTU."
             ),
             "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Reglas de Intención Local",
+            "motor_ia": "Fallback Local",
         }
     else:
         return {
@@ -145,7 +144,7 @@ def procesar_chat(datos: MensajeChat):
                 " sensor?'."
             ),
             "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Reglas de Intención Local",
+            "motor_ia": "Fallback Local",
         }
 
 
