@@ -32,7 +32,7 @@ def procesar_chat(datos: MensajeChat):
     # Intento 1: API REST directa de Gemini con el modelo gemini-1.5-flash
     try:
         # Clave Base64
-        clave_b64 = "QVEuQWI4Uk42SXBjMU1ybmp6d3hNZU5vSTZiNmJuM0Q2YnRoeWFDOW1NQllDb0UtMzQtZw=="
+        clave_b64 = "QVEuQWI4Uk42S1gyLS1SQUh1TWM1cm5RTGdvZFlFWERVUEplN2VoTjBfYm1pNGdsVUJFY3c="
         gemini_api_key = base64.b64decode(clave_b64).decode("utf-8")
         
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
