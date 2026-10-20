@@ -26,7 +26,6 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN NI TEXTO ADICIONAL):
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
     try:
-        # Obtiene la clave segura configurada en Render
         api_key = os.getenv("GROQ_API_KEY")
         
         if not api_key:
@@ -46,7 +45,7 @@ def procesar_chat(datos: MensajeChat):
         }
         
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "llama-3.1-8b-instant",
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": datos.mensaje}
@@ -75,7 +74,7 @@ def procesar_chat(datos: MensajeChat):
                 "intencion_detectada": intencion,
                 "respuesta": respuesta_texto,
                 "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Llama 3.3 70B (Groq IA Real)"
+                "motor_ia": "Llama 3.1 8B Instant (Groq IA Real)"
             }
         else:
             return {
