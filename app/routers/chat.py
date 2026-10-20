@@ -1,5 +1,5 @@
 import json
-import base64
+import os
 import requests
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -23,13 +23,20 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN NI TEXTO ADICIONAL):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-# Tu API key de Groq codificada en Base64
-CLAVE_GROQ_B64 = "Z3NrX3ZyTkloS0E5TFFxcjhqZEt0UE5OV0dkeWIzRllZOTFQbWlhOXVFYnNaaUpEdWFhUTlYOTZD"
-
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
     try:
-        api_key = base64.b64decode(CLAVE_GROQ_B64).decode("utf-8")
+        # Obtiene la clave segura configurada en Render
+        api_key = os.getenv("GROQ_API_KEY")
+        
+        if not api_key:
+            return {
+                "status": "error",
+                "intencion_detectada": "desconocido",
+                "respuesta": "Falta la variable GROQ_API_KEY en Render.",
+                "estado_led": ESTADO_HARDWARE["led"],
+                "motor_ia": "Error Config"
+            }
         
         url = "https://api.groq.com/openai/v1/chat/completions"
         
