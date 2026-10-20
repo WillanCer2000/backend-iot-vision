@@ -23,17 +23,16 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-# Decodificar clave en Base64
-clave_b64 = "PEGA_AQUI_TU_CLAVE_EN_BASE64"
-gemini_api_key = base64.b64decode(clave_b64).decode("utf-8")
-
-# Configurar SDK oficial de Google
-genai.configure(api_key=gemini_api_key)
+# Tu clave de Gemini codificada previamente en Base64
+CLAVE_B64 = "QVEuQWI4Uk42SXBjMU1ybmp6d3hNZU5vSTZiNmJuM0Q2YnRoeWFDOW1NQllDb0UtMzQtZw=="
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
     try:
-        # Inicializar modelo con SDK
+        # Decodificación y configuración dentro del endpoint para garantizar el inicio de Uvicorn
+        api_key = base64.b64decode(CLAVE_B64).decode("utf-8")
+        genai.configure(api_key=api_key)
+
         model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
             system_instruction=SYSTEM_PROMPT,
