@@ -28,14 +28,13 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    api_key = os.getenv(
-        "GROQ_API_KEY",
-        "gsk_9sARGBRV2ColAIUQEZvWGdyb3FYWUdgX38wHCLRpNbjPFc6vQB",
-    ).strip()
+    # FORZAMOS LA CLAVE ABSOLUTA (Ignorando las variables de Render)
+    api_key = "gsk_9sARGBRV2ColAIUQEZvWGdyb3FYWUdgX38wHCLRpNbjPFc6vQB"
 
     # Peticion HTTP directa a Groq Llama 3.1
     try:
         url = "https://api.groq.com/openai/v1/chat/completions"
+# ... (el resto del código queda exactamente igual)
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
