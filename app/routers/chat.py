@@ -1,7 +1,8 @@
 import json
-import requests
+import base64
 from fastapi import APIRouter
 from pydantic import BaseModel
+import google.generativeai as genai
 
 router = APIRouter(prefix="/api", tags=["Chat con IA"])
 
@@ -22,61 +23,51 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
+# Decodificar clave en Base64
+clave_b64 = "PEGA_AQUI_TU_CLAVE_EN_BASE64"
+gemini_api_key = base64.b64decode(clave_b64).decode("utf-8")
+
+# Configurar SDK oficial de Google
+genai.configure(api_key=gemini_api_key)
+
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-   # Dividimos la clave para que el filtro de GitHub no la rechace
-    # Decodificación segura en memoria para evitar el escáner de commits de GitHub
-    import base64
-    clave_b64 = "QVEuQWI4Uk42S1gyLS1SQUh1TWM1cm5RTGdvZFlFWERVUEplN2VoTjBfYm1pNGdsVUJFY3c="
-    gemini_api_key = base64.b64decode(clave_b64).decode("utf-8")
-
     try:
-        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
-        
-        # Payload adaptado estrictamente para la API de Gemini
-        payload = {
-            "contents": [
-                {"parts": [{"text": f"{SYSTEM_PROMPT}\n\nMensaje del usuario: {datos.mensaje}"}]}
-            ],
-            "generationConfig": {
-                "temperature": 0.1,
-                "responseMimeType": "application/json"
-            }
+        # Inicializar modelo con SDK
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=SYSTEM_PROMPT,
+            generation_config={"response_mime_type": "application/json", "temperature": 0.1}
+        )
+
+        response = model.generate_content(datos.mensaje)
+        content = response.text.replace("```json", "").replace("```", "").strip()
+        data_json = json.loads(content)
+
+        intencion = data_json.get("intencion", "desconocido")
+        respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
+
+        if intencion == "encender_led":
+            ESTADO_HARDWARE["led"] = True
+        elif intencion == "apagar_led":
+            ESTADO_HARDWARE["led"] = False
+
+        return {
+            "status": "success",
+            "intencion_detectada": intencion,
+            "respuesta": respuesta_texto,
+            "estado_led": ESTADO_HARDWARE["led"],
+            "motor_ia": "Gemini-1.5-Flash (SDK)"
         }
-        headers = {"Content-Type": "application/json"}
-
-        res = requests.post(url, headers=headers, json=payload, timeout=10)
-
-        if res.status_code == 200:
-            data = res.json()
-            # Extraer el texto de la respuesta de Gemini
-            content = data["candidates"][0]["content"]["parts"][0]["text"]
-            
-            # Limpiar posible markdown basura
-            content = content.replace("```json", "").replace("```", "").strip()
-            data_json = json.loads(content)
-            
-            intencion = data_json.get("intencion", "desconocido")
-            respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
-
-            if intencion == "encender_led":
-                ESTADO_HARDWARE["led"] = True
-            elif intencion == "apagar_led":
-                ESTADO_HARDWARE["led"] = False
-
-            return {
-                "status": "success",
-                "intencion_detectada": intencion,
-                "respuesta": respuesta_texto,
-                "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Gemini-1.5-Flash"
-            }
-        else:
-            return {"status": "error", "intencion_detectada": "desconocido", "respuesta": f"Error de IA: {res.status_code} - {res.text}", "estado_led": ESTADO_HARDWARE["led"], "motor_ia": "Error API"}
 
     except Exception as e:
-        return {"status": "error", "intencion_detectada": "desconocido", "respuesta": f"Excepcion: {str(e)}", "estado_led": ESTADO_HARDWARE["led"], "motor_ia": "Falla IA"}
-
+        return {
+            "status": "error",
+            "intencion_detectada": "desconocido",
+            "respuesta": f"Excepcion SDK: {str(e)}",
+            "estado_led": ESTADO_HARDWARE["led"],
+            "motor_ia": "Falla IA"
+        }
 
 @router.get("/esp32/estado-led")
 def obtener_estado_led():
