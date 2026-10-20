@@ -6,10 +6,8 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["Chat con IA"])
 
-
 class MensajeChat(BaseModel):
     mensaje: str
-
 
 ESTADO_HARDWARE = {"led": False}
 
@@ -25,89 +23,63 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    # FORZAMOS LA CLAVE ABSOLUTA (Ignorando las variables de Render)
-    api_key = "gsk_9sARGBRV2ColAIUQEZvWGdyb3FYWUdgX38wHCLRpNbjPFc6vQB"
+    # Lectura SEGURA de la clave de entorno para evitar bloqueos de GitHub
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
 
-    # Peticion HTTP directa a Groq Llama 3.1
-    try:
-        url = "https://api.groq.com/openai/v1/chat/completions"
-# ... (el resto del código queda exactamente igual)
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "llama-3.1-8b-instant",
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": datos.mensaje},
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
-
-        res = requests.post(url, headers=headers, json=payload, timeout=8)
-
-        if res.status_code == 200:
-            content = res.json()["choices"][0]["message"]["content"]
-            data_json = json.loads(content)
-            intencion = data_json.get("intencion", "desconocido")
-            respuesta_texto = data_json.get(
-                "respuesta_conversacional", "Procesado por la IA."
-            )
-
-            if intencion == "encender_led":
-                ESTADO_HARDWARE["led"] = True
-            elif intencion == "apagar_led":
-                ESTADO_HARDWARE["led"] = False
-
-            return {
-                "status": "success",
-                "intencion_detectada": intencion,
-                "respuesta": respuesta_texto,
-                "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Llama-3.1-8B-Groq",
+    if api_key:
+        try:
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
             }
-        else:
-            print(f"Error Groq HTTP status: {res.status_code}")
-    except Exception as e:
-        print(f"Error en peticion Groq: {e}")
+            payload = {
+                "model": "llama-3.1-8b-instant",
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": datos.mensaje},
+                ],
+                "temperature": 0.1,
+                "response_format": {"type": "json_object"},
+            }
+
+            res = requests.post(url, headers=headers, json=payload, timeout=8)
+
+            if res.status_code == 200:
+                content = res.json()["choices"][0]["message"]["content"]
+                data_json = json.loads(content)
+                intencion = data_json.get("intencion", "desconocido")
+                respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
+
+                if intencion == "encender_led":
+                    ESTADO_HARDWARE["led"] = True
+                elif intencion == "apagar_led":
+                    ESTADO_HARDWARE["led"] = False
+
+                return {
+                    "status": "success",
+                    "intencion_detectada": intencion,
+                    "respuesta": respuesta_texto,
+                    "estado_led": ESTADO_HARDWARE["led"],
+                    "motor_ia": "Llama-3.1-8B-Groq",
+                }
+            else:
+                print(f"Error Groq HTTP status: {res.status_code}")
+        except Exception as e:
+            print(f"Excepcion en peticion HTTP Groq: {e}")
 
     # Fallback local
     texto = datos.mensaje.lower().strip()
-    if any(
-        w in texto for w in ["enciende", "prende", "encender", "activa", "oscuro"]
-    ) and any(w in texto for w in ["led", "luz", "bombillo", "tanque"]):
+    if any(w in texto for w in ["enciende", "prende", "encender", "activa", "oscuro"]) and any(w in texto for w in ["led", "luz", "bombillo", "tanque"]):
         ESTADO_HARDWARE["led"] = True
-        return {
-            "status": "success",
-            "intencion_detectada": "encender_led",
-            "respuesta": "¡Entendido! He encendido el LED del ESP32.",
-            "estado_led": True,
-            "motor_ia": "Fallback Local",
-        }
-    elif any(
-        w in texto for w in ["apaga", "desactiva", "apagar"]
-    ) and any(w in texto for w in ["led", "luz", "bombillo"]):
+        return {"status": "success", "intencion_detectada": "encender_led", "respuesta": "¡Entendido! He encendido el LED del ESP32.", "estado_led": True, "motor_ia": "Fallback Local"}
+    elif any(w in texto for w in ["apaga", "desactiva", "apagar"]) and any(w in texto for w in ["led", "luz", "bombillo"]):
         ESTADO_HARDWARE["led"] = False
-        return {
-            "status": "success",
-            "intencion_detectada": "apagar_led",
-            "respuesta": "Entendido, he apagado el LED del ESP32.",
-            "estado_led": False,
-            "motor_ia": "Fallback Local",
-        }
+        return {"status": "success", "intencion_detectada": "apagar_led", "respuesta": "Entendido, he apagado el LED del ESP32.", "estado_led": False, "motor_ia": "Fallback Local"}
     else:
-        return {
-            "status": "unrecognized",
-            "intencion_detectada": "desconocido",
-            "respuesta": "No reconozco esa instrucción.",
-            "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Fallback Local",
-        }
+        return {"status": "unrecognized", "intencion_detectada": "desconocido", "respuesta": "No reconozco esa instrucción.", "estado_led": ESTADO_HARDWARE["led"], "motor_ia": "Fallback Local"}
 
 
 @router.get("/esp32/estado-led")
