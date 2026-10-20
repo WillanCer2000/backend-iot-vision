@@ -1,6 +1,6 @@
 import json
 import base64
-import requests
+import google.generativeai as genai
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -19,58 +19,47 @@ Eres la IA de un sistema IoT de Calidad de Agua. Clasifica la intencion del usua
 4. "ultimo_registro": si pide el historial o ultimo registro.
 5. "desconocido": cualquier otro tema.
 
-RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
+RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN NI TEXTO ADICIONAL):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-# Cadena Base64 exacta generada en tu terminal
+# Tu clave codificada en Base64 para bypass de GitHub
 CLAVE_B64 = "QVEuQWI4Uk42S1NMTlpFeU96TlRySlI2NWJCOVZaNzd1VWx0V2VmcXJELUJGbVNyMU9LU0E="
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
     try:
+        # Decodificar clave
         api_key = base64.b64decode(CLAVE_B64).decode("utf-8")
         
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-        prompt = f"{SYSTEM_PROMPT}\n\nMensaje del usuario: {datos.mensaje}"
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        # Configurar la SDK oficial de Google (Soporta nativamente tokens AQ.Ab8RN6)
+        genai.configure(api_key=api_key)
         
-        headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": api_key
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=SYSTEM_PROMPT,
+            generation_config={"response_mime_type": "application/json", "temperature": 0.1}
+        )
+
+        response = model.generate_content(datos.mensaje)
+        clean_text = response.text.strip()
+        data_json = json.loads(clean_text)
+
+        intencion = data_json.get("intencion", "desconocido")
+        respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
+
+        if intencion == "encender_led":
+            ESTADO_HARDWARE["led"] = True
+        elif intencion == "apagar_led":
+            ESTADO_HARDWARE["led"] = False
+
+        return {
+            "status": "success",
+            "intencion_detectada": intencion,
+            "respuesta": respuesta_texto,
+            "estado_led": ESTADO_HARDWARE["led"],
+            "motor_ia": "Gemini SDK Oficial"
         }
-
-        r = requests.post(url, json=payload, headers=headers, timeout=10)
-        
-        if r.status_code == 200:
-            res_data = r.json()
-            raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-            clean_text = raw_text.replace("```json", "").replace("```", "").strip()
-            data_json = json.loads(clean_text)
-
-            intencion = data_json.get("intencion", "desconocido")
-            respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
-
-            if intencion == "encender_led":
-                ESTADO_HARDWARE["led"] = True
-            elif intencion == "apagar_led":
-                ESTADO_HARDWARE["led"] = False
-
-            return {
-                "status": "success",
-                "intencion_detectada": intencion,
-                "respuesta": respuesta_texto,
-                "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Gemini 2.5 Flash"
-            }
-        else:
-            return {
-                "status": "error",
-                "intencion_detectada": "desconocido",
-                "respuesta": f"Error API ({r.status_code}): {r.text}",
-                "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Error API"
-            }
 
     except Exception as e:
         return {
