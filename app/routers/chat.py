@@ -23,20 +23,22 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-# Clave de Gemini codificada en Base64
-CLAVE_B64 = "QVEuQWI4Uk42S1gyLS1SQUh1TWM1cm5RTGdvZFlFWERVUEp1N2VoTjBfYm1pNGlUBEcw"
+# Cadena Base64 exacta generada en tu terminal
+CLAVE_B64 = "QVEuQWI4Uk42S1NMTlpFeU96TlRySlI2NWJCOVZaNzd1VWx0V2VmcXJELUJGbVNyMU9LU0E="
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
     try:
-        gemini_api_key = base64.b64decode(CLAVE_B64).decode("utf-8")
+        api_key = base64.b64decode(CLAVE_B64).decode("utf-8")
         
-        # Endpoint oficial directo al modelo activo gemini-2.5-flash
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
-        
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
         prompt = f"{SYSTEM_PROMPT}\n\nMensaje del usuario: {datos.mensaje}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        headers = {"Content-Type": "application/json"}
+        
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key
+        }
 
         r = requests.post(url, json=payload, headers=headers, timeout=10)
         
@@ -59,13 +61,13 @@ def procesar_chat(datos: MensajeChat):
                 "intencion_detectada": intencion,
                 "respuesta": respuesta_texto,
                 "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Gemini 2.5 Flash (IA Real)"
+                "motor_ia": "Gemini 2.5 Flash"
             }
         else:
             return {
                 "status": "error",
                 "intencion_detectada": "desconocido",
-                "respuesta": f"Error de IA ({r.status_code}): {r.text}",
+                "respuesta": f"Error API ({r.status_code}): {r.text}",
                 "estado_led": ESTADO_HARDWARE["led"],
                 "motor_ia": "Error API"
             }
@@ -74,7 +76,7 @@ def procesar_chat(datos: MensajeChat):
         return {
             "status": "error",
             "intencion_detectada": "desconocido",
-            "respuesta": f"Excepción de conexión: {str(e)}",
+            "respuesta": f"Excepción backend: {str(e)}",
             "estado_led": ESTADO_HARDWARE["led"],
             "motor_ia": "Error Backend"
         }
