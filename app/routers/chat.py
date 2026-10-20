@@ -34,7 +34,7 @@ def procesar_chat(datos: MensajeChat):
         genai.configure(api_key=api_key)
 
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-1.5-flash-latest",
             system_instruction=SYSTEM_PROMPT,
             generation_config={"response_mime_type": "application/json", "temperature": 0.1}
         )
