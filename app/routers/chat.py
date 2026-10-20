@@ -45,7 +45,7 @@ def procesar_chat(datos: MensajeChat):
         }
         
         payload = {
-            "model": "llama-3.1-8b-instant",
+            "model": "llama3-8b-8192",
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": datos.mensaje}
@@ -74,7 +74,7 @@ def procesar_chat(datos: MensajeChat):
                 "intencion_detectada": intencion,
                 "respuesta": respuesta_texto,
                 "estado_led": ESTADO_HARDWARE["led"],
-                "motor_ia": "Llama 3.1 8B Instant (Groq IA Real)"
+                "motor_ia": "Llama3 8B (Groq IA Real)"
             }
         else:
             return {
