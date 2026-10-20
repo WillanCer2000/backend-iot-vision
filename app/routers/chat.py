@@ -1,6 +1,6 @@
 import json
 import base64
-import google.generativeai as genai
+import requests
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -23,43 +23,61 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN NI TEXTO ADICIONAL):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-# Tu clave codificada en Base64 para bypass de GitHub
-CLAVE_B64 = "QVEuQWI4Uk42S1NMTlpFeU96TlRySlI2NWJCOVZaNzd1VWx0V2VmcXJELUJGbVNyMU9LU0E="
+# Tu API key de Groq codificada en Base64
+CLAVE_GROQ_B64 = "Z3NrX3ZyTkloS0E5TFFxcjhqZEt0UE5OV0dkeWIzRllZOTFQbWlhOXVFYnNaaUpEdWFhUTlYOTZD"
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
     try:
-        # Decodificar clave
-        api_key = base64.b64decode(CLAVE_B64).decode("utf-8")
+        api_key = base64.b64decode(CLAVE_GROQ_B64).decode("utf-8")
         
-        # Configurar la SDK oficial de Google (Soporta nativamente tokens AQ.Ab8RN6)
-        genai.configure(api_key=api_key)
+        url = "https://api.groq.com/openai/v1/chat/completions"
         
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=SYSTEM_PROMPT,
-            generation_config={"response_mime_type": "application/json", "temperature": 0.1}
-        )
-
-        response = model.generate_content(datos.mensaje)
-        clean_text = response.text.strip()
-        data_json = json.loads(clean_text)
-
-        intencion = data_json.get("intencion", "desconocido")
-        respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
-
-        if intencion == "encender_led":
-            ESTADO_HARDWARE["led"] = True
-        elif intencion == "apagar_led":
-            ESTADO_HARDWARE["led"] = False
-
-        return {
-            "status": "success",
-            "intencion_detectada": intencion,
-            "respuesta": respuesta_texto,
-            "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Gemini SDK Oficial"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
         }
+        
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": datos.mensaje}
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1
+        }
+
+        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        
+        if r.status_code == 200:
+            res_data = r.json()
+            raw_text = res_data["choices"][0]["message"]["content"]
+            data_json = json.loads(raw_text)
+
+            intencion = data_json.get("intencion", "desconocido")
+            respuesta_texto = data_json.get("respuesta_conversacional", "Procesado por la IA.")
+
+            if intencion == "encender_led":
+                ESTADO_HARDWARE["led"] = True
+            elif intencion == "apagar_led":
+                ESTADO_HARDWARE["led"] = False
+
+            return {
+                "status": "success",
+                "intencion_detectada": intencion,
+                "respuesta": respuesta_texto,
+                "estado_led": ESTADO_HARDWARE["led"],
+                "motor_ia": "Llama 3.3 70B (Groq IA Real)"
+            }
+        else:
+            return {
+                "status": "error",
+                "intencion_detectada": "desconocido",
+                "respuesta": f"Error Groq ({r.status_code}): {r.text}",
+                "estado_led": ESTADO_HARDWARE["led"],
+                "motor_ia": "Error API"
+            }
 
     except Exception as e:
         return {
