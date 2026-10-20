@@ -42,7 +42,7 @@ def procesar_chat(datos: MensajeChat):
                 "Content-Type": "application/json",
             }
             payload = {
-                "model": "llama-3.1-8b-instant",  # Modelo rápido y 100% estable
+                "model": "mixtral-8x7b-32768",  # Modelo estable y sin restricciones de cuenta
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": datos.mensaje},
