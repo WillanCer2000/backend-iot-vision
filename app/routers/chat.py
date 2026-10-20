@@ -1,8 +1,7 @@
-import base64
 import json
 import os
+import requests
 from fastapi import APIRouter
-from groq import Groq
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["Chat con IA"])
@@ -12,58 +11,52 @@ class MensajeChat(BaseModel):
     mensaje: str
 
 
-# Estado global simulado del hardware
 ESTADO_HARDWARE = {"led": False}
 
 SYSTEM_PROMPT = """
-Eres la Inteligencia Artificial encargada de controlar el sistema IoT de 'Calidad de Agua'.
-Tu objetivo es clasificar el mensaje del usuario en una de las siguientes intenciones (intencion):
+Eres la IA de un sistema IoT de Calidad de Agua. Clasifica la intencion del usuario:
+1. "encender_led": si pide encender, prender, activar la luz, LED, bombillo, o si dice que hay oscuridad, falta luz o no se ve nada.
+2. "apagar_led": si pide apagar o desactivar la luz / LED.
+3. "leer_sensor": si pregunta por la temperatura, lectura o calidad del agua.
+4. "ultimo_registro": si pide el historial o ultimo registro.
+5. "desconocido": cualquier otro tema.
 
-1. "encender_led": cuando pida encender, prender, activar la luz, LED o bombillo del sistema/tanque, o manifieste oscuridad.
-2. "apagar_led": cuando pida apagar, desactivar la luz, LED o bombillo.
-3. "leer_sensor": cuando pregunte por el valor actual del sensor, la lectura de temperatura, turbidez o calidad del agua.
-4. "ultimo_registro": cuando pregunte por el historial reciente, el último dato o registro guardado.
-5. "desconocido": para cualquier otro tema no relacionado con el sistema IoT.
-
-DEBES RESPONDER EXCLUSIVAMENTE EN FORMATO JSON CON ESTA ESTRUCTURA (SIN MARKDOWN NI TEXTO ADICIONAL):
-{
-  "intencion": "<nombre_de_la_intencion>",
-  "respuesta_conversacional": "<respuesta amigable en español dirigida al usuario explicando la acción>"
-}
+RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
+{"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
-    # Clave en Base64 para bypass de seguridad de GitHub
-    encoded_key = "Z3NrXzlzQVJHUkJWMkNvbEFJVVFFWnZXR2R5YjNGWVdVZGdYMzh3SENMUnBOYmpQRmM2dlFC"
+    api_key = os.getenv(
+        "GROQ_API_KEY",
+        "gsk_9sARGBRV2ColAIUQEZvWGdyb3FYWUdgX38wHCLRpNbjPFc6vQB",
+    ).strip()
 
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
-    if not api_key or len(api_key) < 10:
-        try:
-            api_key = base64.b64decode(encoded_key).decode("utf-8")
-        except Exception:
-            api_key = ""
+    # Peticion HTTP directa a Groq Llama 3.1
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": datos.mensaje},
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
 
-    # Procesar con Groq LLM
-    if api_key:
-        try:
-            client = Groq(api_key=api_key)
-            chat_completion = client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": datos.mensaje},
-                ],
-                model="llama-3.1-8b-instant",
-                temperature=0.2,
-                response_format={"type": "json_object"},
-            )
+        res = requests.post(url, headers=headers, json=payload, timeout=8)
 
-            respuesta_json = json.loads(
-                chat_completion.choices[0].message.content
-            )
-            intencion = respuesta_json.get("intencion", "desconocido")
-            respuesta_texto = respuesta_json.get(
+        if res.status_code == 200:
+            content = res.json()["choices"][0]["message"]["content"]
+            data_json = json.loads(content)
+            intencion = data_json.get("intencion", "desconocido")
+            respuesta_texto = data_json.get(
                 "respuesta_conversacional", "Procesado por la IA."
             )
 
@@ -79,12 +72,13 @@ def procesar_chat(datos: MensajeChat):
                 "estado_led": ESTADO_HARDWARE["led"],
                 "motor_ia": "Llama-3.1-8B-Groq",
             }
-        except Exception as e:
-            print(f"CRITICAL ERROR GROQ: {e}")
+        else:
+            print(f"Error Groq HTTP status: {res.status_code}")
+    except Exception as e:
+        print(f"Error en peticion Groq: {e}")
 
-    # Fallback local únicamente en caso de falla de red/API
+    # Fallback local
     texto = datos.mensaje.lower().strip()
-
     if any(
         w in texto for w in ["enciende", "prende", "encender", "activa", "oscuro"]
     ) and any(w in texto for w in ["led", "luz", "bombillo", "tanque"]):
@@ -97,7 +91,7 @@ def procesar_chat(datos: MensajeChat):
             "motor_ia": "Fallback Local",
         }
     elif any(
-        w in texto for w in ["apaga", "desactiva", "apagar", "desactivame"]
+        w in texto for w in ["apaga", "desactiva", "apagar"]
     ) and any(w in texto for w in ["led", "luz", "bombillo"]):
         ESTADO_HARDWARE["led"] = False
         return {
@@ -107,50 +101,11 @@ def procesar_chat(datos: MensajeChat):
             "estado_led": False,
             "motor_ia": "Fallback Local",
         }
-    elif any(
-        w in texto
-        for w in [
-            "valor",
-            "temperatura",
-            "turbidez",
-            "sensor",
-            "lectura",
-            "estado del agua",
-        ]
-    ):
-        return {
-            "status": "success",
-            "intencion_detectada": "leer_sensor",
-            "respuesta": (
-                "La lectura actual del sensor es: Temperatura 24.5 °C y"
-                " Turbidez 3.2 NTU (Calidad Óptima)."
-            ),
-            "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Fallback Local",
-        }
-    elif any(
-        w in texto
-        for w in ["ultimo", "registro", "historial", "ultimo dato", "reciente"]
-    ):
-        return {
-            "status": "success",
-            "intencion_detectada": "ultimo_registro",
-            "respuesta": (
-                "El último registro guardado fue hace 2 minutos: 24.3 °C,"
-                " Turbidez: 3.1 NTU."
-            ),
-            "estado_led": ESTADO_HARDWARE["led"],
-            "motor_ia": "Fallback Local",
-        }
     else:
         return {
             "status": "unrecognized",
             "intencion_detectada": "desconocido",
-            "respuesta": (
-                "No reconozco esa instrucción. Puedes pedirme cosas como:"
-                " 'enciende el led', 'apaga la luz' o '¿cuál es la lectura del"
-                " sensor?'."
-            ),
+            "respuesta": "No reconozco esa instrucción.",
             "estado_led": ESTADO_HARDWARE["led"],
             "motor_ia": "Fallback Local",
         }
