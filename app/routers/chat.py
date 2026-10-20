@@ -24,7 +24,7 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN):
 """
 
 # Tu clave de Gemini codificada previamente en Base64
-CLAVE_B64 = "QVEuQWI4Uk42SXBjMU1ybmp6d3hNZU5vSTZiNmJuM0Q2YnRoeWFDOW1NQllDb0UtMzQtZw=="
+CLAVE_B64 = "QVEuQWI4Uk42S1gyLS1SQUh1TWM1cm5RTGdvZFlFWERVUEplN2VoTjBfYm1pNGdsVUJFY3c="
 
 @router.post("/chat")
 def procesar_chat(datos: MensajeChat):
