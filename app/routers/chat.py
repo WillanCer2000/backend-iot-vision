@@ -31,7 +31,7 @@ def procesar_chat(datos: MensajeChat):
     gemini_api_key = base64.b64decode(clave_b64).decode("utf-8")
 
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
         
         # Payload adaptado estrictamente para la API de Gemini
         payload = {
