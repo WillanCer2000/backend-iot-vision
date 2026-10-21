@@ -11,11 +11,13 @@ class MensajeChat(BaseModel):
 
 ESTADO_HARDWARE = {"led": False}
 
-SYSTEM_PROMPT = """
+URL_TELEMETRIA = "https://cienega-api-2.onrender.com/api/telemetria"
+
+SYSTEM_PROMPT_BASE = """
 Eres la IA de un sistema IoT de Calidad de Agua. Clasifica la intencion del usuario:
 1. "encender_led": si pide encender, prender, activar la luz, LED, bombillo, o si dice que hay oscuridad, falta luz o no se ve nada.
 2. "apagar_led": si pide apagar o desactivar la luz / LED.
-3. "leer_sensor": si pregunta por la temperatura, lectura o calidad del agua.
+3. "leer_sensor": si pregunta por la temperatura, lectura, turbidez o calidad del agua.
 4. "ultimo_registro": si pide el historial o ultimo registro.
 5. "desconocido": cualquier otro tema.
 
@@ -23,7 +25,6 @@ RESPONDE EXCLUSIVAMENTE EN FORMATO JSON (SIN MARKDOWN NI TEXTO ADICIONAL):
 {"intencion": "<nombre>", "respuesta_conversacional": "<mensaje>"}
 """
 
-# Lista de modelos según la documentación de tus compañeros
 MODELO_PRINCIPAL = "openai/gpt-oss-120b"
 MODELO_RESPALDO = "openai/gpt-oss-20b"
 
@@ -41,17 +42,28 @@ def procesar_chat(datos: MensajeChat):
                 "motor_ia": "Error Config"
             }
         
+        # 1. Traer datos reales del ESP32 desde la API central
+        datos_telemetria = "No disponible"
+        try:
+            res_iot = requests.get(URL_TELEMETRIA, timeout=3)
+            if res_iot.status_code == 200:
+                datos_telemetria = res_iot.json()
+        except Exception:
+            pass
+
+        system_prompt = f"{SYSTEM_PROMPT_BASE}\n\n[DATOS SENSOR ESP32 EN VIVO]: {json.dumps(datos_telemetria)}"
+
+        # 2. Inferencia con Groq
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
-        # Intentar primero con el modelo principal
         payload = {
             "model": MODELO_PRINCIPAL,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": datos.mensaje}
             ],
             "response_format": {"type": "json_object"},
@@ -60,7 +72,6 @@ def procesar_chat(datos: MensajeChat):
 
         r = requests.post(url, json=payload, headers=headers, timeout=10)
         
-        # Si el modelo principal falla, intenta inmediatamente con el de respaldo
         if r.status_code != 200:
             payload["model"] = MODELO_RESPALDO
             r = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -83,6 +94,7 @@ def procesar_chat(datos: MensajeChat):
                 "intencion_detectada": intencion,
                 "respuesta": respuesta_texto,
                 "estado_led": ESTADO_HARDWARE["led"],
+                "datos_sensor": datos_telemetria,
                 "motor_ia": f"Groq ({payload['model']})"
             }
         else:
